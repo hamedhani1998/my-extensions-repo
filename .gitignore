@@ -6,6 +6,7 @@ build/
 
 # Gradle
 .gradle/
+.kotlin/
 local.properties
 
 # IDE

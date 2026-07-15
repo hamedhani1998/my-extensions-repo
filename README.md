@@ -9,7 +9,7 @@
 3. اضغط على "Add Repository"
 4. أدخل هذا الرابط:
 ```
-https://raw.githubusercontent.com/hanihamed1998/my-extensions-repo/main/index.json
+https://raw.githubusercontent.com/hamedhani1998/my-extensions-repo/main/index.json
 ```
 5. اضغط "OK"
 6. اذهب إلى Extensions وثبّت الإضافات المتاحة
