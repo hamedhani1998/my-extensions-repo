@@ -2,8 +2,6 @@ package com.arbada.plugin
 
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
-import org.jsoup.nodes.Document
-import org.jsoup.nodes.Element
 
 class ArbadaProvider : MainAPI() {
     override var name = "العربدة"
@@ -28,27 +26,17 @@ class ArbadaProvider : MainAPI() {
                 try {
                     val a = item.selectFirst("a") ?: return@mapNotNull null
                     val href = a.attr("href") ?: return@mapNotNull null
-                    val title = item.selectFirst("strong.title")?.text()?.trim()
-                        ?: a.attr("title")
-                    val poster = item.selectFirst("img.thumb")?.let {
-                        it.attr("data-original").ifBlank { it.attr("src") }
-                    }
+                    val title = item.selectFirst("strong.title")?.text()?.trim() ?: a.attr("title")
+                    val poster = item.selectFirst("img.thumb")?.let { it.attr("data-original").ifBlank { it.attr("src") } }
                     val rating = item.selectFirst("div.rating")?.text()?.trim()?.replace("%", "")
-
                     newMovieSearchResponse(title, href, TvType.NSFW) {
                         this.posterUrl = poster
-                        if (!rating.isNullOrBlank()) {
-                            this.score = Score.from(rating, 100)
-                        }
+                        if (!rating.isNullOrBlank()) this.score = Score.from(rating, 100)
                     }
-                } catch (e: Exception) {
-                    null
-                }
+                } catch (e: Exception) { null }
             }
             newHomePageResponse(request.name, items)
-        } catch (e: Exception) {
-            null
-        }
+        } catch (e: Exception) { null }
     }
 
     override suspend fun search(query: String): List<SearchResponse>? {
@@ -58,198 +46,63 @@ class ArbadaProvider : MainAPI() {
                 try {
                     val a = item.selectFirst("a") ?: return@mapNotNull null
                     val href = a.attr("href") ?: return@mapNotNull null
-                    val title = item.selectFirst("strong.title")?.text()?.trim()
-                        ?: a.attr("title")
-                    val poster = item.selectFirst("img.thumb")?.let {
-                        it.attr("data-original").ifBlank { it.attr("src") }
-                    }
-
-                    newMovieSearchResponse(title, href, TvType.NSFW) {
-                        this.posterUrl = poster
-                    }
-                } catch (e: Exception) {
-                    null
-                }
+                    val title = item.selectFirst("strong.title")?.text()?.trim() ?: a.attr("title")
+                    val poster = item.selectFirst("img.thumb")?.let { it.attr("data-original").ifBlank { it.attr("src") } }
+                    newMovieSearchResponse(title, href, TvType.NSFW) { this.posterUrl = poster }
+                } catch (e: Exception) { null }
             }
-        } catch (e: Exception) {
-            null
-        }
+        } catch (e: Exception) { null }
     }
 
     override suspend fun load(url: String): LoadResponse? {
         return try {
             val doc = app.get(url, referer = mainUrl).document
-            val title = doc.selectFirst("h1.htitle")?.text()?.trim()
-                ?: doc.title().substringBefore(" -").trim()
+            val title = doc.selectFirst("h1.htitle")?.text()?.trim() ?: doc.title().substringBefore(" -").trim()
             val poster = doc.selectFirst("meta[property=og:image]")?.attr("content")
             val description = doc.selectFirst("meta[name=description]")?.attr("content")
-            val tags = doc.select("meta[name=keywords]")?.attr("content")
-                ?.split(",")?.map { it.trim() }?.take(6)
-
-            newMovieLoadResponse(title, url, TvType.NSFW, url) {
-                this.posterUrl = poster
-                this.plot = description
-                this.tags = tags
-            }
-        } catch (e: Exception) {
-            null
-        }
+            val tags = doc.select("meta[name=keywords]")?.attr("content")?.split(",")?.map { it.trim() }?.take(6)
+            newMovieLoadResponse(title, url, TvType.NSFW, url) { this.posterUrl = poster; this.plot = description; this.tags = tags }
+        } catch (e: Exception) { null }
     }
 
     override suspend fun loadLinks(
-        data: String,
-        isCasting: Boolean,
-        subtitleCallback: (SubtitleFile) -> Unit,
-        callback: (ExtractorLink) -> Unit
+        data: String, isCasting: Boolean,
+        subtitleCallback: (SubtitleFile) -> Unit, callback: (ExtractorLink) -> Unit
     ): Boolean {
         return try {
             val doc = app.get(data, referer = mainUrl).document
             
-            // Method 1: HTML5 video sources (primary method for arbada.com)
-            val videoSources = doc.select("video source")
-            if (videoSources.isNotEmpty()) {
-                videoSources.forEach { source ->
-                    val src = source.attr("src")
-                    val quality = source.attr("title").ifBlank {
-                        when {
-                            src.contains("720p") -> "720p"
-                            src.contains("480p") -> "480p"
-                            src.contains("360p") -> "360p"
-                            src.contains("240p") -> "240p"
-                            else -> "360p"
-                        }
-                    }
-                    if (src.isNotBlank()) {
-                        callback(
-                            newExtractorLink(
-                                source = name,
-                                name = name,
-                                url = src,
-                                type = ExtractorLinkType.VIDEO,
-                            ) {
-                                this.referer = mainUrl
-                                this.quality = getQualityFromName(quality)
-                            }
-                        )
-                    }
-                }
-                return true
+            // Method 1: HTML5 video sources (fastest)
+            doc.select("video source").forEach { src ->
+                val url = src.attr("src")
+                val quality = src.attr("title").ifBlank { qual(url) }
+                if (url.isNotBlank()) cb(url, quality, mainUrl, callback)
             }
+            if (doc.select("video source").isNotEmpty()) return true
             
-            // Method 2: Flashvars (fallback)
-            val script = doc.select("script").map { it.html() }
-                .firstOrNull { it.contains("flashvars") }
-            
+            // Method 2: flashvars
+            val script = doc.select("script").map { it.html() }.firstOrNull { it.contains("flashvars") }
             if (script != null) {
-                val videoUrl = extractFlashvarValue(script, "video_url")
-                val videoAltUrl = extractFlashvarValue(script, "video_alt_url")
-                val videoAltUrl2 = extractFlashvarValue(script, "video_alt_url2")
-                val videoUrlText = extractFlashvarValue(script, "video_url_text") ?: "360p"
-                val videoAltUrlText = extractFlashvarValue(script, "video_alt_url_text") ?: "480p"
-                val videoAltUrl2Text = extractFlashvarValue(script, "video_alt_url2_text") ?: "720p"
-
-                videoUrl?.let { url ->
-                    val cleanUrl = cleanVideoUrl(url)
-                    callback(
-                        newExtractorLink(
-                            source = name,
-                            name = name,
-                            url = cleanUrl,
-                            type = ExtractorLinkType.VIDEO,
-                        ) {
-                            this.referer = mainUrl
-                            this.quality = getQualityFromName(videoUrlText)
-                        }
-                    )
-                }
-
-                videoAltUrl?.let { url ->
-                    val cleanUrl = cleanVideoUrl(url)
-                    callback(
-                        newExtractorLink(
-                            source = name,
-                            name = name,
-                            url = cleanUrl,
-                            type = ExtractorLinkType.VIDEO,
-                        ) {
-                            this.referer = mainUrl
-                            this.quality = getQualityFromName(videoAltUrlText)
-                        }
-                    )
-                }
-
-                videoAltUrl2?.let { url ->
-                    val cleanUrl = cleanVideoUrl(url)
-                    callback(
-                        newExtractorLink(
-                            source = name,
-                            name = name,
-                            url = cleanUrl,
-                            type = ExtractorLinkType.VIDEO,
-                        ) {
-                            this.referer = mainUrl
-                            this.quality = getQualityFromName(videoAltUrl2Text)
-                        }
-                    )
-                }
-                return true
+                val v1 = regex(script, "video_url"); val v2 = regex(script, "video_alt_url"); val v3 = regex(script, "video_alt_url2")
+                val q1 = regex(script, "video_url_text") ?: "360p"; val q2 = regex(script, "video_alt_url_text") ?: "480p"; val q3 = regex(script, "video_alt_url2_text") ?: "720p"
+                v1?.let { cb(it, q1, mainUrl, callback) }; v2?.let { cb(it, q2, mainUrl, callback) }; v3?.let { cb(it, q3, mainUrl, callback) }
+                if (v1 != null || v2 != null || v3 != null) return true
             }
             
-            // Method 3: Iframe embed
+            // Method 3: iframe
             val iframe = doc.selectFirst("div.embed-wrap iframe, iframe[src*=embed]")
-            if (iframe != null) {
-                val iframeUrl = iframe.attr("src")
-                if (iframeUrl.isNotBlank()) {
-                    callback(
-                        newExtractorLink(
-                            source = name,
-                            name = name,
-                            url = iframeUrl,
-                            type = ExtractorLinkType.VIDEO,
-                        ) {
-                            this.referer = data
-                            this.quality = getQualityFromName("720p")
-                        }
-                    )
-                    return true
-                }
-            }
-            
+            if (iframe != null) { cb(iframe.attr("src"), "720p", data, callback); return true }
             false
-        } catch (e: Exception) {
-            false
-        }
+        } catch (e: Exception) { false }
     }
 
-    private fun extractFlashvarValue(script: String, key: String): String? {
-        val patterns = listOf(
-            """$key\s*[:=]\s*['"]([^'"]+)['"]""",
-            """$key\s*:\s*["']([^"']+)["']""",
-            """$key\s*=\s*["']([^"']+)["']""",
-            """$key\s*:\s*'([^']+)'""",
-            """$key\s*=\s*'([^']+)'""",
-        )
-        
-        for (pattern in patterns) {
-            try {
-                val regex = Regex(pattern)
-                val match = regex.find(script)
-                if (match != null) {
-                    val value = match.groupValues[1].ifBlank { null }
-                    if (value != null) return value
-                }
-            } catch (_: Exception) {
-                continue
-            }
-        }
-        return null
+    private fun regex(script: String, key: String): String? {
+        val match = Regex("""$key\s*[:=]\s*['"]([^'"]+)['"]""").find(script)
+        return match?.groupValues?.get(1)?.ifBlank { null }
     }
-
-    private fun cleanVideoUrl(url: String): String {
-        return when {
-            url.startsWith("function/0/") -> url.removePrefix("function/0/")
-            url.startsWith("//") -> "https:$url"
-            else -> url
-        }
+    private fun qual(url: String): String = when { url.contains("720p") -> "720p"; url.contains("480p") -> "480p"; url.contains("360p") -> "360p"; url.contains("1080p") -> "1080p"; else -> "360p" }
+    private fun clean(url: String): String = when { url.startsWith("function/0/") -> url.removePrefix("function/0/"); url.startsWith("//") -> "https:$url"; else -> url }
+    private suspend fun cb(url: String, quality: String, referer: String, callback: (ExtractorLink) -> Unit) {
+        callback(newExtractorLink(source = name, name = name, url = clean(url), type = ExtractorLinkType.VIDEO) { this.referer = mainUrl; this.quality = getQualityFromName(quality) })
     }
 }
