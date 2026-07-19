@@ -4,36 +4,40 @@ import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
 
 class SexAllArabProvider : MainAPI() {
-    override var name = "سكس كل العرب"
+    override var name = "ط³ظƒط³ ظƒظ„ ط§ظ„ط¹ط±ط¨"
     override var mainUrl = "https://sexallarab.com"
     override var lang = "ar"
     override val hasMainPage = true
     override val supportedTypes = setOf(TvType.NSFW)
 
     override val mainPage = mainPageOf(
-        "latest-updates/" to "احدث الافلام",
-        "top-rated/" to "افضل الافلام",
-        "most-popular/" to "الاعلى مشاهدة",
+        "" to "ط§ط­ط¯ط« ط§ظ„ط§ظپظ„ط§ظ…",
+        "top-rated/" to "ط§ظپط¶ظ„ ط§ظ„ط§ظپظ„ط§ظ…",
+        "most-popular/" to "ط§ظ„ط§ط¹ظ„ظ‰ ظ…ط´ط§ظ‡ط¯ط©",
+        "categories/ط³ظƒط³-ظ…طھط±ط¬ظ…/" to "ط³ظƒط³ ظ…طھط±ط¬ظ…",
+        "categories/ط³ظƒط³-ط¹ط±ط¨ظٹ/" to "ط³ظƒط³ ط¹ط±ط¨ظٹ",
+        "categories/ط³ظƒط³-ط§ظ…ظ‡ط§طھ/" to "ط³ظƒط³ ط§ظ…ظ‡ط§طھ",
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse? {
         return try {
-            val url = "$mainUrl/${request.data}${if (page > 1) "page/$page/" else ""}"
+            val url = if (request.data.isEmpty()) {
+                if (page > 1) "$mainUrl/page/$page/" else mainUrl
+            } else {
+                "$mainUrl/${request.data.trimEnd('/')}${if (page > 1) "page/$page/" else ""}"
+            }
             val doc = app.get(url, referer = mainUrl).document
             val items = doc.select("div.item").mapNotNull { item ->
                 try {
                     val a = item.selectFirst("a") ?: return@mapNotNull null
-                    val href = a.attr("href") ?: return@mapNotNull null
-                    val title = item.selectFirst("strong.title")?.text()?.trim()
-                        ?: a.selectFirst("span.title")?.text()?.trim()
-                        ?: a.attr("title")
+                    val href = a.attr("href")?.toString() ?: return@mapNotNull null
+                    val title = a.attr("title")?.trim()
+                        ?: item.selectFirst("strong.title")?.text()?.trim()
                     val poster = item.selectFirst("img.thumb")?.let {
                         it.attr("data-original").ifBlank { it.attr("data-src").ifBlank { it.attr("src") } }
                     }
-                    val rating = item.selectFirst("div.rating")?.text()?.trim()?.replace("%", "")
-                    newMovieSearchResponse(title, href, TvType.NSFW) {
+                    newMovieSearchResponse(title ?: "", href, TvType.NSFW) {
                         this.posterUrl = poster
-                        if (!rating.isNullOrBlank()) this.score = Score.from(rating, 100)
                     }
                 } catch (e: Exception) { null }
             }
@@ -43,18 +47,17 @@ class SexAllArabProvider : MainAPI() {
 
     override suspend fun search(query: String): List<SearchResponse>? {
         return try {
-            val doc = app.get("$mainUrl/search/videos/?q=$query", referer = mainUrl).document
+            val doc = app.get("$mainUrl/search/$query/", referer = mainUrl).document
             doc.select("div.item").mapNotNull { item ->
                 try {
                     val a = item.selectFirst("a") ?: return@mapNotNull null
-                    val href = a.attr("href") ?: return@mapNotNull null
-                    val title = item.selectFirst("strong.title")?.text()?.trim()
-                        ?: a.selectFirst("span.title")?.text()?.trim()
-                        ?: a.attr("title")
+                    val href = a.attr("href")?.toString() ?: return@mapNotNull null
+                    val title = a.attr("title")?.trim()
+                        ?: item.selectFirst("strong.title")?.text()?.trim()
                     val poster = item.selectFirst("img.thumb")?.let {
                         it.attr("data-original").ifBlank { it.attr("data-src").ifBlank { it.attr("src") } }
                     }
-                    newMovieSearchResponse(title, href, TvType.NSFW) { this.posterUrl = poster }
+                    newMovieSearchResponse(title ?: "", href, TvType.NSFW) { this.posterUrl = poster }
                 } catch (e: Exception) { null }
             }
         } catch (e: Exception) { null }
@@ -64,7 +67,6 @@ class SexAllArabProvider : MainAPI() {
         return try {
             val doc = app.get(url, referer = mainUrl).document
             val title = doc.selectFirst("h1")?.text()?.trim()
-                ?: doc.selectFirst(".title, .htitle, .video-title")?.text()?.trim()
                 ?: doc.selectFirst("meta[property=og:title]")?.attr("content")
                 ?: doc.title().substringBefore(" -").trim()
             val poster = doc.selectFirst("meta[property=og:image]")?.attr("content")
@@ -84,26 +86,8 @@ class SexAllArabProvider : MainAPI() {
     ): Boolean {
         try {
             val doc = app.get(data, referer = mainUrl).document
-            var found = false
 
-            doc.select("video source").forEach { source ->
-                val url = source.attr("src")
-                val quality = source.attr("title")
-                if (url.isNotBlank() && url.contains(".mp4")) {
-                    callback(newExtractorLink(
-                        source = name,
-                        name = name,
-                        url = url,
-                        type = ExtractorLinkType.VIDEO
-                    ) {
-                        this.referer = mainUrl
-                        this.quality = getQualityFromName(quality.ifBlank { "360p" })
-                    })
-                    found = true
-                }
-            }
-            if (found) return true
-
+            // Method 1: flashvars - PRIMARY for KVS CMS
             val allScript = doc.select("script").joinToString("\n") { it.data() }
             if (allScript.contains("flashvars")) {
                 val entries = listOf(
@@ -116,16 +100,41 @@ class SexAllArabProvider : MainAPI() {
                     val quality = Regex("""$textKey\s*[:=]\s*['"]([^'"]+)['"]""").find(allScript)?.groupValues?.get(1)
                         ?: when(urlKey) { "video_url" -> "240p"; "video_alt_url" -> "360p"; else -> "480p" }
                     if (!url.isNullOrBlank()) {
-                        callback(newExtractorLink(name, name, url, ExtractorLinkType.VIDEO) {
+                        val decoded = decodeUrl(url)
+                        callback(newExtractorLink(name, name, decoded, ExtractorLinkType.VIDEO) {
                             this.referer = mainUrl
                             this.quality = getQualityFromName(quality)
                         })
-                        found = true
                     }
                 }
+                return true
             }
-            if (found) return true
 
+            // Method 2: video_url in JavaScript (kt_player)
+            val videoUrlMatch = Regex("""video_url\s*:\s*['"]([^'"]+)['"]""").find(allScript)
+            if (videoUrlMatch != null) {
+                val videoUrl = decodeUrl(videoUrlMatch.groupValues[1])
+                callback(newExtractorLink(name, name, videoUrl, ExtractorLinkType.VIDEO) {
+                    this.referer = mainUrl
+                    this.quality = getQualityFromName("360p")
+                })
+                return true
+            }
+
+            // Method 3: video source tags
+            doc.select("video source").forEach { source ->
+                val url = source.attr("src")
+                val quality = source.attr("title")
+                if (url.isNotBlank() && url.contains(".mp4")) {
+                    callback(newExtractorLink(name, name, url, ExtractorLinkType.VIDEO) {
+                        this.referer = mainUrl
+                        this.quality = getQualityFromName(quality.ifBlank { "360p" })
+                    })
+                    return true
+                }
+            }
+
+            // Method 4: iframe embed
             val iframe = doc.selectFirst("iframe[src]")
             if (iframe != null) {
                 val iframeUrl = iframe.attr("src")
@@ -137,5 +146,22 @@ class SexAllArabProvider : MainAPI() {
 
             return false
         } catch (e: Exception) { return false }
+    }
+
+    private fun decodeUrl(url: String): String {
+        val decoded = when {
+            url.startsWith("function/0/") -> {
+                try {
+                    val base64 = url.removePrefix("function/0/")
+                    android.util.Base64.decode(base64, android.util.Base64.DEFAULT).toString(Charsets.UTF_8)
+                } catch (_: Exception) { url.removePrefix("function/0/") }
+            }
+            else -> url
+        }
+        return when {
+            decoded.startsWith("//") -> "https:$decoded"
+            decoded.startsWith("https/") -> "https://${decoded.removePrefix("https/")}"
+            else -> decoded
+        }
     }
 }
