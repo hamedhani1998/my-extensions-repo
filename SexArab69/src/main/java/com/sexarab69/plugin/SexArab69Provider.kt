@@ -1,21 +1,21 @@
-﻿package com.sexarab69.plugin
+package com.sexarab69.plugin
 
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
 
 class SexArab69Provider : MainAPI() {
-    override var name = "ط³ظƒط³ ط¹ط±ط¨ 69"
+    override var name = "سكس عرب 69"
     override var mainUrl = "https://sexarab69.com"
     override var lang = "ar"
     override val hasMainPage = true
     override val supportedTypes = setOf(TvType.NSFW)
 
     override val mainPage = mainPageOf(
-        "" to "ط§ط­ط¯ط« ط§ظ„ط§ظپظ„ط§ظ…",
-        "category/ط³ظƒط³-ط¹ط±ط¨ظٹ/" to "ط³ظƒط³ ط¹ط±ط¨ظٹ",
-        "category/ط³ظƒط³-ظ…طھط±ط¬ظ…/" to "ط³ظƒط³ ظ…طھط±ط¬ظ…",
-        "category/ط³ظƒط³-ظ…طµط±ظٹ/" to "ط³ظƒط³ ظ…طµط±ظٹ",
-        "category/ط³ظƒط³-ط§ظ…ظ‡ط§طھ/" to "ط³ظƒط³ ط§ظ…ظ‡ط§طھ",
+        "" to "احدث الافلام",
+        "category/سكس-عربي/" to "سكس عربي",
+        "category/سكس-مترجم/" to "سكس مترجم",
+        "category/سكس-مصري/" to "سكس مصري",
+        "category/سكس-امهات/" to "سكس امهات",
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse? {
@@ -32,7 +32,7 @@ class SexArab69Provider : MainAPI() {
                     val href = a.attr("href")?.toString() ?: return@mapNotNull null
                     val title = item.selectFirst("a.infos span.title")?.text()?.trim()
                         ?: item.selectFirst("span.title")?.text()?.trim()
-                        ?: a.attr("title")
+                        ?: a.attr("title") ?: ""
                     val poster = item.selectFirst("img.video-img")?.let {
                         it.attr("data-src").ifBlank { it.attr("data-lazy-src").ifBlank { it.attr("src") } }
                     }
@@ -54,7 +54,7 @@ class SexArab69Provider : MainAPI() {
                     val href = a.attr("href")?.toString() ?: return@mapNotNull null
                     val title = item.selectFirst("a.infos span.title")?.text()?.trim()
                         ?: item.selectFirst("span.title")?.text()?.trim()
-                        ?: a.attr("title")
+                        ?: a.attr("title") ?: ""
                     val poster = item.selectFirst("img.video-img")?.let {
                         it.attr("data-src").ifBlank { it.attr("data-lazy-src").ifBlank { it.attr("src") } }
                     }
@@ -89,7 +89,6 @@ class SexArab69Provider : MainAPI() {
         try {
             val doc = app.get(data, referer = mainUrl).document
 
-            // Method 1: meta itemprop contentURL
             doc.select("meta[itemprop=contentURL]").forEach { meta ->
                 val url = meta.attr("content")
                 if (url.isNotBlank() && url.contains(".mp4")) {
@@ -101,7 +100,6 @@ class SexArab69Provider : MainAPI() {
                 }
             }
 
-            // Method 2: video source tags
             doc.select("video source").forEach { source ->
                 val url = source.attr("src")
                 val quality = source.attr("title")
@@ -114,7 +112,6 @@ class SexArab69Provider : MainAPI() {
                 }
             }
 
-            // Method 3: iframe embed
             val iframe = doc.selectFirst("iframe[src*=clean-tube-player], iframe[data-src*=clean-tube-player]")
             if (iframe != null) {
                 val iframeUrl = iframe.attr("src").ifBlank { iframe.attr("data-src") }
@@ -124,7 +121,6 @@ class SexArab69Provider : MainAPI() {
                 }
             }
 
-            // Method 4: direct MP4 in script
             val allScript = doc.select("script").joinToString("\n") { it.data() }
             val directMp4 = Regex("""(https?://[^"'\s]+\.mp4[^"'\s]*)""").find(allScript)?.groupValues?.get(1)
             if (directMp4 != null) {

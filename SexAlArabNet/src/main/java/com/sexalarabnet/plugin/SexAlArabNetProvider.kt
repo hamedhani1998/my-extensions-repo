@@ -1,19 +1,19 @@
-﻿package com.sexalarabnet.plugin
+package com.sexalarabnet.plugin
 
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
 
 class SexAlArabNetProvider : MainAPI() {
-    override var name = "ط³ظƒط³ ط§ظ„ط¹ط±ط¨ ظ†طھ"
+    override var name = "سكس العرب نت"
     override var mainUrl = "https://sexalarab.net"
     override var lang = "ar"
     override val hasMainPage = true
     override val supportedTypes = setOf(TvType.NSFW)
 
     override val mainPage = mainPageOf(
-        "latest/" to "ط§ط­ط¯ط« ط§ظ„ط§ظپظ„ط§ظ…",
-        "top_rated/" to "ط§ظپط¶ظ„ ط§ظ„ط§ظپظ„ط§ظ…",
-        "most_popular/" to "ط§ظ„ط§ط¹ظ„ظ‰ ظ…ط´ط§ظ‡ط¯ط©",
+        "latest/" to "احدث الافلام",
+        "top_rated/" to "افضل الافلام",
+        "most_popular/" to "الاعلى مشاهدة",
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse? {

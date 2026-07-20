@@ -1,22 +1,22 @@
-﻿package com.arabnok.plugin
+package com.arabnok.plugin
 
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
 
 class ArabNokProvider : MainAPI() {
-    override var name = "ط¹ط±ط¨ ظ†ظˆظƒ"
+    override var name = "عرب نوك"
     override var mainUrl = "https://arabnok.com"
     override var lang = "ar"
     override val hasMainPage = true
     override val supportedTypes = setOf(TvType.NSFW)
 
     override val mainPage = mainPageOf(
-        "" to "ط§ط­ط¯ط« ط§ظ„ط§ظپظ„ط§ظ…",
-        "category/ط³ظƒط³-ظ…طµط±ظٹ/" to "ط³ظƒط³ ظ…طµط±ظٹ",
-        "category/ط³ظƒط³-ط®ظ„ظٹط¬ظٹ/" to "ط³ظƒط³ ط®ظ„ظٹط¬ظٹ",
-        "category/ط³ظƒط³-ظ…طھط±ط¬ظ…/" to "ط³ظƒط³ ظ…طھط±ط¬ظ…",
-        "category/ط³ظƒط³-ط§ظ…ظ‡ط§طھ/" to "ط³ظƒط³ ط§ظ…ظ‡ط§طھ",
-        "category/ط³ظƒط³-ظ…ط­ط§ط±ظ…/" to "ط³ظƒط³ ظ…ط­ط§ط±ظ…",
+        "" to "احدث الافلام",
+        "category/سكس-مصري/" to "سكس مصري",
+        "category/سكس-خليجي/" to "سكس خليجي",
+        "category/سكس-مترجم/" to "سكس مترجم",
+        "category/سكس-امهات/" to "سكس امهات",
+        "category/سكس-محارم/" to "سكس محارم",
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse? {
@@ -33,7 +33,7 @@ class ArabNokProvider : MainAPI() {
                     val href = a.attr("href")?.toString() ?: return@mapNotNull null
                     val title = item.selectFirst("a.infos span.title")?.text()?.trim()
                         ?: item.selectFirst("span.title")?.text()?.trim()
-                        ?: a.attr("title")
+                        ?: a.attr("title") ?: ""
                     val poster = item.selectFirst("img.video-img, img.video-img-src")?.let {
                         it.attr("data-src").ifBlank { it.attr("data-lazy-src").ifBlank { it.attr("src") } }
                     }
@@ -56,7 +56,7 @@ class ArabNokProvider : MainAPI() {
                     val href = a.attr("href")?.toString() ?: return@mapNotNull null
                     val title = item.selectFirst("a.infos span.title")?.text()?.trim()
                         ?: item.selectFirst("span.title")?.text()?.trim()
-                        ?: a.attr("title")
+                        ?: a.attr("title") ?: ""
                     val poster = item.selectFirst("img.video-img, img.video-img-src")?.let {
                         it.attr("data-src").ifBlank { it.attr("data-lazy-src").ifBlank { it.attr("src") } }
                     }
@@ -91,7 +91,6 @@ class ArabNokProvider : MainAPI() {
         try {
             val doc = app.get(data, referer = mainUrl).document
 
-            // Method 1: meta itemprop contentURL - PRIMARY for WordPress FamousTube
             doc.select("meta[itemprop=contentURL]").forEach { meta ->
                 val url = meta.attr("content")
                 if (url.isNotBlank() && url.contains(".mp4")) {
@@ -108,17 +107,11 @@ class ArabNokProvider : MainAPI() {
                 }
             }
 
-            // Method 2: video source tags
             doc.select("video source").forEach { source ->
                 val url = source.attr("src")
                 val quality = source.attr("title")
                 if (url.isNotBlank() && url.contains(".mp4")) {
-                    callback(newExtractorLink(
-                        source = name,
-                        name = name,
-                        url = url,
-                        type = ExtractorLinkType.VIDEO
-                    ) {
+                    callback(newExtractorLink(name, name, url, ExtractorLinkType.VIDEO) {
                         this.referer = mainUrl
                         this.quality = getQualityFromName(quality.ifBlank { "360p" })
                     })
@@ -126,12 +119,10 @@ class ArabNokProvider : MainAPI() {
                 }
             }
 
-            // Method 3: iframe embed
             val iframe = doc.selectFirst("iframe[src*=clean-tube-player], iframe[data-src*=clean-tube-player]")
             if (iframe != null) {
                 val iframeUrl = iframe.attr("src").ifBlank { iframe.attr("data-src") }
                 if (iframeUrl.isNotBlank()) {
-                    // Try to extract direct MP4 from iframe URL
                     val decoded = try {
                         val base64 = java.net.URLDecoder.decode(iframeUrl.substringAfter("q="), "UTF-8")
                         android.util.Base64.decode(base64, android.util.Base64.DEFAULT).toString(Charsets.UTF_8)
@@ -150,7 +141,6 @@ class ArabNokProvider : MainAPI() {
                 }
             }
 
-            // Method 4: direct MP4 in script
             val allScript = doc.select("script").joinToString("\n") { it.data() }
             val directMp4 = Regex("""(https?://[^"'\s]+\.mp4[^"'\s]*)""").find(allScript)?.groupValues?.get(1)
             if (directMp4 != null) {

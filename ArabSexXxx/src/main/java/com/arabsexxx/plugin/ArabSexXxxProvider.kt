@@ -4,19 +4,16 @@ import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
 
 class ArabSexXxxProvider : MainAPI() {
-    override var name = "ط³ظƒط³ ط¹ط±ط¨ظٹ xxx"
+    override var name = "سكس عربي xxx"
     override var mainUrl = "https://www.arabsex.xxx"
     override var lang = "ar"
     override val hasMainPage = true
     override val supportedTypes = setOf(TvType.NSFW)
 
     override val mainPage = mainPageOf(
-        "latest/" to "ط§ط­ط¯ط« ط§ظ„ط§ظپظ„ط§ظ…",
-        "top_rated/" to "ط§ظپط¶ظ„ ط§ظ„ط§ظپظ„ط§ظ…",
-        "most_popular/" to "ط§ظ„ط§ط¹ظ„ظ‰ ظ…ط´ط§ظ‡ط¯ط©",
-        "categories/ط³ظƒط³-ظ…طھط±ط¬ظ…/" to "ط³ظƒط³ ظ…طھط±ط¬ظ…",
-        "categories/ط³ظƒط³-ط®ظ„ظٹط¬ظٹ/" to "ط³ظƒط³ ط®ظ„ظٹط¬ظٹ",
-        "categories/ط³ظƒط³-ط§ظ…ظ‡ط§طھ/" to "ط³ظƒط³ ط§ظ…ظ‡ط§طھ",
+        "latest/" to "احدث الافلام",
+        "top_rated/" to "افضل الافلام",
+        "most_popular/" to "الاعلى مشاهدة",
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse? {
@@ -26,17 +23,12 @@ class ArabSexXxxProvider : MainAPI() {
             val items = doc.select("div.item").mapNotNull { item ->
                 try {
                     val a = item.selectFirst("a") ?: return@mapNotNull null
-                    val href = a.attr("href") ?: return@mapNotNull null
-                    val title = a.attr("title")?.trim()
-                        ?: item.selectFirst("strong.title")?.text()?.trim()
+                    val href = a.attr("href")?.toString() ?: return@mapNotNull null
+                    val title = a.attr("title")?.trim() ?: item.selectFirst("strong.title")?.text()?.trim() ?: ""
                     val poster = item.selectFirst("img.thumb, img.lazy-load")?.let {
                         it.attr("data-original").ifBlank { it.attr("data-src").ifBlank { it.attr("src") } }
                     }
-                    val duration = item.selectFirst("div.duration")?.text()?.trim()
-                    val rating = item.selectFirst("div.rating")?.text()?.trim()?.replace("%", "")
-                    newMovieSearchResponse(title ?: "", href, TvType.NSFW) {
-                        this.posterUrl = poster
-                    }
+                    newMovieSearchResponse(title, href, TvType.NSFW) { this.posterUrl = poster }
                 } catch (e: Exception) { null }
             }
             newHomePageResponse(request.name, items)
@@ -49,13 +41,12 @@ class ArabSexXxxProvider : MainAPI() {
             doc.select("div.item").mapNotNull { item ->
                 try {
                     val a = item.selectFirst("a") ?: return@mapNotNull null
-                    val href = a.attr("href") ?: return@mapNotNull null
-                    val title = a.attr("title")?.trim()
-                        ?: item.selectFirst("strong.title")?.text()?.trim()
+                    val href = a.attr("href")?.toString() ?: return@mapNotNull null
+                    val title = a.attr("title")?.trim() ?: item.selectFirst("strong.title")?.text()?.trim() ?: ""
                     val poster = item.selectFirst("img.thumb, img.lazy-load")?.let {
                         it.attr("data-original").ifBlank { it.attr("data-src").ifBlank { it.attr("src") } }
                     }
-                    newMovieSearchResponse(title ?: "", href, TvType.NSFW) { this.posterUrl = poster }
+                    newMovieSearchResponse(title, href, TvType.NSFW) { this.posterUrl = poster }
                 } catch (e: Exception) { null }
             }
         } catch (e: Exception) { null }
@@ -71,9 +62,7 @@ class ArabSexXxxProvider : MainAPI() {
             val description = doc.selectFirst("meta[name=description]")?.attr("content")
             val tags = doc.select("meta[name=keywords]")?.attr("content")?.split(",")?.map { it.trim() }?.take(6)
             newMovieLoadResponse(title, url, TvType.NSFW, url) {
-                this.posterUrl = poster
-                this.plot = description
-                this.tags = tags
+                this.posterUrl = poster; this.plot = description; this.tags = tags
             }
         } catch (e: Exception) { null }
     }
@@ -84,65 +73,53 @@ class ArabSexXxxProvider : MainAPI() {
     ): Boolean {
         try {
             val doc = app.get(data, referer = mainUrl).document
-
-            // Method 1: flashvars - PRIMARY for KVS CMS
             val allScript = doc.select("script").joinToString("\n") { it.data() }
+
             if (allScript.contains("flashvars")) {
-                val entries = listOf(
-                    "video_url" to "video_url_text",
-                    "video_alt_url" to "video_alt_url_text",
-                    "video_alt_url2" to "video_alt_url2_text"
-                )
-                for ((urlKey, textKey) in entries) {
+                val entries = listOf("video_url" to "240p", "video_alt_url" to "360p", "video_alt_url2" to "480p")
+                for ((urlKey, quality) in entries) {
                     val url = Regex("""$urlKey\s*[:=]\s*['"]([^'"]+)['"]""").find(allScript)?.groupValues?.get(1)
-                    val quality = Regex("""$textKey\s*[:=]\s*['"]([^'"]+)['"]""").find(allScript)?.groupValues?.get(1)
-                        ?: when(urlKey) { "video_url" -> "240p"; "video_alt_url" -> "360p"; else -> "480p" }
                     if (!url.isNullOrBlank()) {
-                        val decoded = decodeUrl(url)
-                        callback(newExtractorLink(name, name, decoded, ExtractorLinkType.VIDEO) {
-                            this.referer = mainUrl
-                            this.quality = getQualityFromName(quality)
+                        callback(newExtractorLink(name, name, decodeUrl(url), ExtractorLinkType.VIDEO) {
+                            this.referer = mainUrl; this.quality = getQualityFromName(quality)
                         })
                     }
                 }
                 return true
             }
 
-            // Method 2: video source tags
+            val videoUrlMatch = Regex("""video_url\s*:\s*['"]([^'"]+)['"]""").find(allScript)
+            if (videoUrlMatch != null) {
+                callback(newExtractorLink(name, name, decodeUrl(videoUrlMatch.groupValues[1]), ExtractorLinkType.VIDEO) {
+                    this.referer = mainUrl; this.quality = getQualityFromName("360p")
+                })
+                return true
+            }
+
             doc.select("video source").forEach { source ->
                 val url = source.attr("src")
-                val quality = source.attr("title")
                 if (url.isNotBlank() && url.contains(".mp4")) {
                     callback(newExtractorLink(name, name, url, ExtractorLinkType.VIDEO) {
-                        this.referer = mainUrl
-                        this.quality = getQualityFromName(quality.ifBlank { "360p" })
+                        this.referer = mainUrl; this.quality = getQualityFromName("360p")
                     })
                     return true
                 }
             }
 
-            // Method 3: iframe embed
             val iframe = doc.selectFirst("iframe[src]")
             if (iframe != null) {
-                val iframeUrl = iframe.attr("src")
-                if (iframeUrl.isNotBlank()) {
-                    loadExtractor(iframeUrl, mainUrl, subtitleCallback, callback)
-                    return true
-                }
+                loadExtractor(iframe.attr("src"), mainUrl, subtitleCallback, callback)
+                return true
             }
-
             return false
         } catch (e: Exception) { return false }
     }
 
     private fun decodeUrl(url: String): String {
         val decoded = when {
-            url.startsWith("function/0/") -> {
-                try {
-                    val base64 = url.removePrefix("function/0/")
-                    android.util.Base64.decode(base64, android.util.Base64.DEFAULT).toString(Charsets.UTF_8)
-                } catch (_: Exception) { url.removePrefix("function/0/") }
-            }
+            url.startsWith("function/0/") -> try {
+                android.util.Base64.decode(url.removePrefix("function/0/"), android.util.Base64.DEFAULT).toString(Charsets.UTF_8)
+            } catch (_: Exception) { url.removePrefix("function/0/") }
             else -> url
         }
         return when {

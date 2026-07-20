@@ -4,16 +4,16 @@ import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
 
 class ArabSex1Provider : MainAPI() {
-    override var name = "ط³ظƒط³ ط¹ط±ط¨ظٹ 1"
+    override var name = "سكس عربي 1"
     override var mainUrl = "https://arabsex1.com"
     override var lang = "ar"
     override val hasMainPage = true
     override val supportedTypes = setOf(TvType.NSFW)
 
     override val mainPage = mainPageOf(
-        "latest/" to "ط§ط­ط¯ط« ط§ظ„ط§ظپظ„ط§ظ…",
-        "top_rated/" to "ط§ظپط¶ظ„ ط§ظ„ط§ظپظ„ط§ظ…",
-        "most_popular/" to "ط§ظ„ط§ط¹ظ„ظ‰ ظ…ط´ط§ظ‡ط¯ط©",
+        "latest/" to "احدث الافلام",
+        "top_rated/" to "افضل الافلام",
+        "most_popular/" to "الاعلى مشاهدة",
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse? {
@@ -23,12 +23,12 @@ class ArabSex1Provider : MainAPI() {
             val items = doc.select("div.item").mapNotNull { item ->
                 try {
                     val a = item.selectFirst("a") ?: return@mapNotNull null
-                    val href = a.attr("href") ?: return@mapNotNull null
+                    val href = a.attr("href")?.toString() ?: return@mapNotNull null
                     val title = a.attr("title")?.trim() ?: item.selectFirst("strong.title")?.text()?.trim() ?: ""
                     val poster = item.selectFirst("img.thumb, img.lazy-load")?.let {
                         it.attr("data-original").ifBlank { it.attr("data-src").ifBlank { it.attr("src") } }
                     }
-                    newMovieSearchResponse(title ?: "", href, TvType.NSFW) { this.posterUrl = poster }
+                    newMovieSearchResponse(title, href, TvType.NSFW) { this.posterUrl = poster }
                 } catch (e: Exception) { null }
             }
             newHomePageResponse(request.name, items)
@@ -41,12 +41,12 @@ class ArabSex1Provider : MainAPI() {
             doc.select("div.item").mapNotNull { item ->
                 try {
                     val a = item.selectFirst("a") ?: return@mapNotNull null
-                    val href = a.attr("href") ?: return@mapNotNull null
+                    val href = a.attr("href")?.toString() ?: return@mapNotNull null
                     val title = a.attr("title")?.trim() ?: item.selectFirst("strong.title")?.text()?.trim() ?: ""
                     val poster = item.selectFirst("img.thumb, img.lazy-load")?.let {
                         it.attr("data-original").ifBlank { it.attr("data-src").ifBlank { it.attr("src") } }
                     }
-                    newMovieSearchResponse(title ?: "", href, TvType.NSFW) { this.posterUrl = poster }
+                    newMovieSearchResponse(title, href, TvType.NSFW) { this.posterUrl = poster }
                 } catch (e: Exception) { null }
             }
         } catch (e: Exception) { null }

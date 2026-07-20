@@ -1,19 +1,19 @@
-﻿package com.xnxx3rab.plugin
+package com.xnxx3rab.plugin
 
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
 
 class XNXX3rabProvider : MainAPI() {
-    override var name = "ط¹ط±ط¨ xnxx"
+    override var name = "عرب xnxx"
     override var mainUrl = "https://3rabxn.com"
     override var lang = "ar"
     override val hasMainPage = true
     override val supportedTypes = setOf(TvType.NSFW)
 
     override val mainPage = mainPageOf(
-        "latest/" to "ط§ط­ط¯ط« ط§ظ„ط§ظپظ„ط§ظ…",
-        "top_rated/" to "ط§ظپط¶ظ„ ط§ظ„ط§ظپظ„ط§ظ…",
-        "most_popular/" to "ط§ظ„ط§ط¹ظ„ظ‰ ظ…ط´ط§ظ‡ط¯ط©",
+        "latest/" to "احدث الافلام",
+        "top_rated/" to "افضل الافلام",
+        "most_popular/" to "الاعلى مشاهدة",
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse? {
