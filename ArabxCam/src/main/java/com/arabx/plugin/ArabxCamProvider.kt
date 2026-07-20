@@ -43,7 +43,7 @@ class ArabxCamProvider : MainAPI() {
 
     override suspend fun search(query: String): List<SearchResponse>? {
         return try {
-            val doc = app.get("$mainUrl/search/$query/", referer = mainUrl).document
+            val doc = app.get("$mainUrl/search/videos/?q=$query", referer = mainUrl).document
             doc.select("div.item").mapNotNull { item ->
                 try {
                     val a = item.selectFirst("a") ?: return@mapNotNull null
@@ -77,56 +77,118 @@ class ArabxCamProvider : MainAPI() {
         data: String, isCasting: Boolean,
         subtitleCallback: (SubtitleFile) -> Unit, callback: (ExtractorLink) -> Unit
     ): Boolean {
-        try {
+        return try {
             val doc = app.get(data, referer = mainUrl).document
-            val html = doc.html()
 
-            // Method 1: iframe embed - PRIMARY for this site (playeriz.com)
-            val iframe = doc.selectFirst("div.embed-wrap iframe")
+            // Method 1: flashvars (old format - may still work on some videos)
+            val script = doc.select("script").map { it.html() }
+                .firstOrNull { it.contains("flashvars") }
+            if (script != null) {
+                extractFlashvarsLinks(script, callback)
+                return true
+            }
+
+            // Method 2: iframe embed - try to load the iframe page directly
+            val iframe = doc.selectFirst("div.embed-wrap iframe, iframe[src*=playeriz], iframe[src*=embed]")
             if (iframe != null) {
                 val iframeUrl = iframe.attr("src")
                 if (iframeUrl.isNotBlank()) {
-                    // Load the iframe page to extract video URL
-                    val iframeDoc = app.get(iframeUrl, referer = data).document
-                    val iframeHtml = iframeDoc.html()
-
-                    // Try to find video URL in iframe
-                    val videoUrl = Regex("""(https?://[^"'\s]+\.mp4[^"'\s]*)""").find(iframeHtml)?.groupValues?.get(1)
-                    if (videoUrl != null) {
-                        callback(newExtractorLink(name, name, videoUrl, ExtractorLinkType.VIDEO) {
-                            this.referer = iframeUrl
-                            this.quality = getQualityFromName("720p")
-                        })
-                        return true
-                    }
-
-                    // Try m3u8
-                    val m3u8Url = Regex("""(https?://[^"'\s]+\.m3u8[^"'\s]*)""").find(iframeHtml)?.groupValues?.get(1)
-                    if (m3u8Url != null) {
-                        callback(newExtractorLink(name, name, m3u8Url, ExtractorLinkType.M3U8) {
-                            this.referer = iframeUrl
-                            this.quality = getQualityFromName("720p")
-                        })
-                        return true
-                    }
-
-                    // Fallback: use loadExtractor
+                    // Try to fetch the iframe page to get direct video URL
+                    try {
+                        val iframeDoc = app.get(iframeUrl, referer = data).document
+                        val iframeScript = iframeDoc.select("script").map { it.html() }
+                            .firstOrNull { it.contains("video_url") || it.contains("flashvars") }
+                        
+                        if (iframeScript != null) {
+                            extractFlashvarsLinks(iframeScript, callback)
+                            return true
+                        }
+                    } catch (_: Exception) {}
+                    
+                    // If we can't extract from iframe, use loadExtractor
                     loadExtractor(iframeUrl, data, subtitleCallback, callback)
                     return true
                 }
             }
 
-            // Method 2: contentUrl in JSON-LD
-            val contentUrl = Regex(""""contentUrl"\s*:\s*"([^"]+\.mp4[^"]*)""").find(html)?.groupValues?.get(1)
-            if (!contentUrl.isNullOrBlank()) {
-                callback(newExtractorLink(name, name, contentUrl, ExtractorLinkType.VIDEO) {
-                    this.referer = mainUrl
-                    this.quality = getQualityFromName("720p")
-                })
+            // Method 3: HTML5 video sources
+            val videoSources = doc.select("video source, source[type*=video]")
+            if (videoSources.isNotEmpty()) {
+                videoSources.forEach { source ->
+                    val src = source.attr("src")
+                    val quality = source.attr("title").ifBlank {
+                        when {
+                            src.contains("720p") -> "720p"
+                            src.contains("480p") -> "480p"
+                            src.contains("360p") -> "360p"
+                            else -> "360p"
+                        }
+                    }
+                    if (src.isNotBlank()) {
+                        callback(newExtractorLink(name, name, src, ExtractorLinkType.VIDEO) {
+                            this.referer = data
+                            this.quality = getQualityFromName(quality)
+                        })
+                    }
+                }
                 return true
             }
+            
+            false
+        } catch (e: Exception) { false }
+    }
 
-            return false
-        } catch (e: Exception) { return false }
+    private suspend fun extractFlashvarsLinks(script: String, callback: (ExtractorLink) -> Unit) {
+        val videoUrl = extractFlashvarValue(script, "video_url")
+        val videoAltUrl = extractFlashvarValue(script, "video_alt_url")
+        val videoAltUrl2 = extractFlashvarValue(script, "video_alt_url2")
+        val videoUrlText = extractFlashvarValue(script, "video_url_text") ?: "360p"
+        val videoAltUrlText = extractFlashvarValue(script, "video_alt_url_text") ?: "480p"
+        val videoAltUrl2Text = extractFlashvarValue(script, "video_alt_url2_text") ?: "720p"
+
+        videoUrl?.let { url ->
+            val cleanUrl = cleanVideoUrl(url)
+            callback(newExtractorLink(name, name, cleanUrl, ExtractorLinkType.VIDEO) {
+                this.referer = mainUrl; this.quality = getQualityFromName(videoUrlText)
+            })
+        }
+        videoAltUrl?.let { url ->
+            val cleanUrl = cleanVideoUrl(url)
+            callback(newExtractorLink(name, name, cleanUrl, ExtractorLinkType.VIDEO) {
+                this.referer = mainUrl; this.quality = getQualityFromName(videoAltUrlText)
+            })
+        }
+        videoAltUrl2?.let { url ->
+            val cleanUrl = cleanVideoUrl(url)
+            callback(newExtractorLink(name, name, cleanUrl, ExtractorLinkType.VIDEO) {
+                this.referer = mainUrl; this.quality = getQualityFromName(videoAltUrl2Text)
+            })
+        }
+    }
+
+    private fun extractFlashvarValue(script: String, key: String): String? {
+        val patterns = listOf(
+            """$key\s*[:=]\s*['"]([^'"]+)['"]""",
+            """$key\s*:\s*["']([^"']+)["']""",
+            """$key\s*=\s*["']([^"']+)["']""",
+        )
+        for (pattern in patterns) {
+            try {
+                val match = Regex(pattern).find(script)
+                if (match != null) {
+                    val value = match.groupValues[1].ifBlank { null }
+                    if (value != null) return value
+                }
+            } catch (_: Exception) { continue }
+        }
+        return null
+    }
+
+    private fun cleanVideoUrl(url: String): String {
+        return when {
+            url.startsWith("function/0/") -> url.removePrefix("function/0/")
+            url.startsWith("//") -> "https:$url"
+            else -> url
+        }
     }
 }
